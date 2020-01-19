@@ -1,29 +1,49 @@
+# In order to remain strictly backwards-compatible with supermin 4.1.4
+# shipped in RHEL 7 GA, this package contains both supermin 4.1.4 and
+# supermin 5.  The 'supermin' binary is supermin 4.  The new
+# subpackage 'supermin5' contains a binary of the same name.
+
 Summary:       Tool for creating supermin appliances
 Name:          supermin
-Version:       4.1.4
-Release:       1%{?dist}
+Version:       5.1.10
+Release:       1.2%{?dist}
 License:       GPLv2+
 
 %if 0%{?rhel} >= 7
-ExclusiveArch: x86_64
+ExclusiveArch: aarch64 %{power64} x86_64
 %endif
 
 URL:           http://people.redhat.com/~rjones/supermin/
-Source0:       http://libguestfs.org/download/supermin/%{name}-%{version}.tar.gz
+Source0:       http://libguestfs.org/download/supermin/%{name}-4.1.4.tar.gz
+Source1:       http://libguestfs.org/download/supermin/%{name}-%{version}.tar.gz
 
+# Patches for supermin 4:
+# (None)
+
+# Patches for supermin 5:
+# (None)
+
+# BRs for supermin 4:
 BuildRequires: /usr/bin/pod2man
 BuildRequires: yum >= 3.2
 BuildRequires: /usr/sbin/mke2fs
 BuildRequires: e2fsprogs-devel
 BuildRequires: glibc-static, zlib-static
 BuildRequires: ocaml, ocaml-findlib-devel
-BuildRequires: prelink
 
 # automake isn't actually required; however the src/.depend file gets
 # rebuilt which newer automake thinks (wrongly) means that the
 # Makefile.am has been touched and needs rebuilding.
 BuildRequires: automake
 
+# BRs for supermin 5 (those not listed already):
+BuildRequires: yum-utils
+
+# These are required only to run the tests.  We could patch out the
+# tests to not require these packages.
+BuildRequires: augeas hivex kernel tar
+
+# Runtime requires for supermin 4:
 Requires:      yum >= 3.2
 Requires:      yum-utils
 Requires:      supermin-helper%{?_isa} = %{version}-%{release}
@@ -40,6 +60,8 @@ Supermin is a tool for building supermin appliances.  These are tiny
 appliances (similar to virtual machines), usually around 100KB in
 size, which get fully instantiated on-the-fly in a fraction of a
 second when you need to boot one of them.
+
+This package contains supermin version 4.
 
 
 %package helper
@@ -58,43 +80,131 @@ Obsoletes:     febootstrap-supermin-helper <= 3.21-1
 %{name}-helper contains the runtime support for %{name}.
 
 
+%package -n supermin5
+Summary:       Supermin version 5
+
+Requires:      rpm
+Requires:      yum-utils
+Requires:      util-linux-ng
+Requires:      cpio
+Requires:      tar
+Requires:      /usr/sbin/mke2fs
+# RHBZ#771310
+Requires:      e2fsprogs-libs >= 1.42
+
+
+%description -n supermin5
+Supermin is a tool for building supermin appliances.  These are tiny
+appliances (similar to virtual machines), usually around 100KB in
+size, which get fully instantiated on-the-fly in a fraction of a
+second when you need to boot one of them.
+
+This package contains supermin version %{version}.  The binary
+is called 'supermin5', so that we do not break compatibility
+with RHEL 7 GA.
+
+
 %prep
-%setup -q
+# This creates:
+#   supermin-5.*/
+#   supermin-5.*/supermin-4.1.4/    # supermin 4
+#   supermin-5.*/supermin-5.*/      # supermin 5
+%setup -q -c
+%setup -T -D -a 1
+
+# This is so supermin 4 no longer requires prelink:
+cp %{name}-%{version}/src/bin2s.pl %{name}-4.1.4/helper/bin2s.pl
 
 
 %build
+pushd %{name}-4.1.4
 %configure --disable-network-tests
 make
+popd
+
+pushd %{name}-%{version}
+%configure --disable-network-tests
+make
+popd
 
 
 %install
+# Have to do the supermin5 install first so we can move the files
+# that it installs.
+pushd %{name}-%{version}
 make DESTDIR=$RPM_BUILD_ROOT install
+pushd $RPM_BUILD_ROOT%{_bindir}
+mv supermin supermin5
+popd
+pushd $RPM_BUILD_ROOT%{_mandir}/man1
+mv supermin.1 supermin5.1
+popd
+popd
 
-# supermin-helper is marked as requiring an executable stack.  This
-# happens because we use objcopy to create one of the component object
-# files from a data file.  The program does not in fact require an
-# executable stack.  The easiest way to fix this is to clear the flag
-# here.
-execstack -c $RPM_BUILD_ROOT%{_bindir}/supermin-helper
+pushd %{name}-4.1.4
+make DESTDIR=$RPM_BUILD_ROOT install
+popd
 
 
 %check
+pushd %{name}-4.1.4
 make check
+popd
+
+pushd %{name}-%{version}
+make check || {
+    cat tests/test-suite.log
+    exit 1
+}
+popd
 
 
 %files
-%doc COPYING README examples/build-basic-vm.sh
+%doc %{name}-4.1.4/COPYING
+%doc %{name}-4.1.4/README
+%doc %{name}-4.1.4/examples/build-basic-vm.sh
 %{_bindir}/supermin
 %{_mandir}/man8/supermin.8*
 
 
 %files helper
-%doc COPYING
+%doc %{name}-4.1.4/COPYING
 %{_bindir}/supermin-helper
 %{_mandir}/man8/supermin-helper.8*
 
 
+%files -n supermin5
+%doc %{name}-%{version}/COPYING
+%doc %{name}-%{version}/README
+%doc %{name}-%{version}/examples/build-basic-vm.sh
+%{_bindir}/supermin5
+%{_mandir}/man1/supermin5.1*
+
+
 %changelog
+* Wed Sep 10 2014 Richard W.M. Jones <rjones@redhat.com> - 5.1.10-1.2
+- Enable all ppc64 architectures, including BE.
+
+* Thu Sep 04 2014 Richard W.M. Jones <rjones@redhat.com> - 5.1.10-1.1
+- Rebase to supermin 5.1.10.
+  resolves: rhbz#1021150
+
+* Fri Aug 08 2014 Richard W.M. Jones <rjones@redhat.com> - 5.1.9-1.4
+- Completely remove dependency on prelink/execstack (RHBZ#1093261).
+- Rebuild for aarch64 and ppc64le (1125690).
+
+* Mon Jul 21 2014 Richard W.M. Jones <rjones@redhat.com> - 5.1.9-1
+- Rebase to supermin 5.1.9.
+  resolves: rhbz#1021150
+- Remove patches, now all upstream.
+
+* Wed May 21 2014 Richard W.M. Jones <rjones@redhat.com> - 5.1.8-5.1
+- Package supermin 5 for RHEL 7.1.
+- Remove supermin 4 patch which was included by accident.
+
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 4.1.4-2
+- Mass rebuild 2013-12-27
+
 * Wed Aug 28 2013 Richard W.M. Jones <rjones@redhat.com> - 4.1.4-1
 - New upstream version 4.1.4.
 - Supports compressed cpio image files, experimentally.
