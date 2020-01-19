@@ -1,0 +1,75 @@
+From b4131cefc55ae41862a426bed83aa87c8362866b Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Mon, 16 May 2016 18:55:33 +0100
+Subject: [PATCH 1/7] Add support for a DAX root filesystem.
+
+With these changes you can provide an ext4 root filesystem on a
+virtual NVDIMM.  The filesystem will be mounted using DAX, so files
+are directly read, mmapped etc from the underlying host file, saving
+guest memory both directly and in the guest page cache.
+---
+ init/init.c        | 19 ++++++++++++++++---
+ src/ext2_initrd.ml |  4 ++++
+ 2 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/init/init.c b/init/init.c
+index 3014de2..106be02 100644
+--- a/init/init.c
++++ b/init/init.c
+@@ -154,11 +154,14 @@ main ()
+    */
+   char *root, *path;
+   size_t len;
++  int dax = 0;
+   root = strstr (cmdline, "root=");
+   if (root) {
+     root += 5;
+     if (strncmp (root, "/dev/", 5) == 0)
+       root += 5;
++    if (strncmp (root, "pmem", 4) == 0)
++      dax = 1;
+     len = strcspn (root, " ");
+     root[len] = '\0';
+ 
+@@ -243,10 +246,20 @@ main ()
+     exit (EXIT_FAILURE);
+   }
+ 
++  /* Construct the filesystem mount options. */
++  const char *mount_options = "";
++  if (dax)
++    mount_options = "dax";
++
+   /* Mount new root and chroot to it. */
+-  if (!quiet)
+-    fprintf (stderr, "supermin: mounting new root on /root\n");
+-  if (mount ("/dev/root", "/root", "ext2", MS_NOATIME, "") == -1) {
++  if (!quiet) {
++    fprintf (stderr, "supermin: mounting new root on /root");
++    if (mount_options[0] != '\0')
++      fprintf (stderr, " (%s)", mount_options);
++    fprintf (stderr, "\n");
++  }
++  if (mount ("/dev/root", "/root", "ext2", MS_NOATIME,
++             mount_options) == -1) {
+     perror ("mount: /root");
+     exit (EXIT_FAILURE);
+   }
+diff --git a/src/ext2_initrd.ml b/src/ext2_initrd.ml
+index 55a38d0..d4a4e2f 100644
+--- a/src/ext2_initrd.ml
++++ b/src/ext2_initrd.ml
+@@ -45,6 +45,10 @@ let kmods = [
+   "crc*.ko*";
+   "libcrc*.ko*";
+   "ibmvscsic.ko*";
++  "libnvdimm.ko*";
++  "nd_pmem.ko*";
++  "nd_btt.ko*";
++  "nfit.ko*";
+ ]
+ 
+ (* A blacklist of kmods which match the above patterns, but which we
+-- 
+2.7.4
+

@@ -1,0 +1,25 @@
+From 272c35b435dd6a71c79f90626567bdddebb72b41 Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 14 Jun 2016 16:06:24 +0100
+Subject: [PATCH 3/7] init: Print size of 'init'.
+
+Useful for seeing in the build logs if the init program grows in size.
+---
+ src/Makefile.am | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Makefile.am b/src/Makefile.am
+index 443e25d..11adf31 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -143,6 +143,7 @@ ext2init-bin.o: ext2init-bin.S
+ 
+ ext2init-bin.S: ../init/init $(srcdir)/bin2s.pl
+ 	strip --strip-all $<
++	ls -l $<
+ 	@file $< | grep -isq static || \
+ 	  (echo "*** error: init is not statically linked"; exit 1)
+ 	$(srcdir)/bin2s.pl $< $@
+-- 
+2.7.4
+

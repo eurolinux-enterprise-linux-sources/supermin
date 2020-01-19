@@ -1,0 +1,100 @@
+From a67c0c5632fe6f68c02b0b5623217782b094c00e Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Tue, 14 Jun 2016 16:07:29 +0100
+Subject: [PATCH 4/7] init: Delete initramfs files before chrooting into the
+ appliance.
+
+After supermin has finished running, the initramfs files sit around
+occupying non-swappable memory but serving no further purpose.
+
+This saves a little memory, at the cost of about 1ms of extra boot
+time.
+---
+ init/init.c | 50 ++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 48 insertions(+), 2 deletions(-)
+
+diff --git a/init/init.c b/init/init.c
+index 733d66e..5ac53e9 100644
+--- a/init/init.c
++++ b/init/init.c
+@@ -1,5 +1,5 @@
+ /* supermin-helper reimplementation in C.
+- * Copyright (C) 2009-2014 Red Hat Inc.
++ * Copyright (C) 2009-2016 Red Hat Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+@@ -80,6 +80,7 @@ static void mount_proc (void);
+ static void print_uptime (void);
+ static void read_cmdline (void);
+ static void insmod (const char *filename);
++static void delete_initramfs_files (void);
+ static void show_directory (const char *dir);
+ 
+ static char cmdline[1024];
+@@ -264,9 +265,12 @@ main ()
+     exit (EXIT_FAILURE);
+   }
+ 
++  if (!quiet)
++    fprintf (stderr, "supermin: deleting initramfs files\n");
++  delete_initramfs_files ();
++
+   /* Note that pivot_root won't work.  See the note in
+    * Documentation/filesystems/ramfs-rootfs-initramfs.txt
+-   * We could remove the old initramfs files, but let's not bother.
+    */
+   if (!quiet)
+     fprintf (stderr, "supermin: chroot\n");
+@@ -396,6 +400,48 @@ read_cmdline (void)
+     cmdline[len-1] = '\0';
+ }
+ 
++/* By deleting the files in the initramfs before we chroot, we save a
++ * little bit of memory (or quite a lot of memory if the user is using
++ * unstripped kmods).
++ *
++ * We only delete files in the root directory.  We don't delete
++ * directories because they only take a tiny amount of space and
++ * because we must not delete any mountpoints, especially not /root
++ * where we are about to chroot.
++ *
++ * We don't recursively look for files because that would be too
++ * complex and risky, and the normal supermin initramfs doesn't have
++ * any files except in the root directory.
++ */
++static void
++delete_initramfs_files (void)
++{
++  DIR *dir;
++  struct dirent *d;
++  struct stat statbuf;
++
++  if (chdir ("/") == -1) {
++    perror ("chdir: /");
++    return;
++  }
++
++  dir = opendir (".");
++  if (!dir) {
++    perror ("opendir: /");
++    return;
++  }
++
++  while ((d = readdir (dir)) != NULL) {
++    /* "." and ".." are directories, so the S_ISREG test ignores them. */
++    if (lstat (d->d_name, &statbuf) >= 0 && S_ISREG (statbuf.st_mode)) {
++      if (unlink (d->d_name) == -1)
++        perror (d->d_name);
++    }
++  }
++
++  closedir (dir);
++}
++
+ /* Display a directory on stderr.  This is used for debugging only. */
+ static char
+ dirtype (int dt)
+-- 
+2.7.4
+

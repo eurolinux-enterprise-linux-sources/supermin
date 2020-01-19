@@ -5,8 +5,8 @@
 
 Summary:       Tool for creating supermin appliances
 Name:          supermin
-Version:       5.1.10
-Release:       1.2%{?dist}
+Version:       5.1.16
+Release:       4%{?dist}
 License:       GPLv2+
 
 %if 0%{?rhel} >= 7
@@ -18,23 +18,32 @@ Source0:       http://libguestfs.org/download/supermin/%{name}-4.1.4.tar.gz
 Source1:       http://libguestfs.org/download/supermin/%{name}-%{version}.tar.gz
 
 # Patches for supermin 4:
-# (None)
+Patch0:        supermin-4.1.4-fix-exec-stack.patch
 
 # Patches for supermin 5:
-# (None)
+# All upstream patches since 5.1.16 was released.
+Patch1:        0001-Add-support-for-a-DAX-root-filesystem.patch
+Patch2:        0002-init-Don-t-allocate-modules-on-the-stack-RHBZ-133969.patch
+Patch3:        0003-init-Print-size-of-init.patch
+Patch4:        0004-init-Delete-initramfs-files-before-chrooting-into-th.patch
+Patch5:        0005-ext2-Don-t-load-whole-files-into-memory-when-copying.patch
+Patch6:        0006-build-include-packagelist-Use-supermin-tmpdir.patch
+Patch7:        0007-Use-var-tmp-instead-of-tmp-if-TMPDIR-is-not-set.patch
 
 # BRs for supermin 4:
 BuildRequires: /usr/bin/pod2man
+BuildRequires: /usr/bin/pod2html
+BuildRequires: rpm
+BuildRequires: rpm-devel
 BuildRequires: yum >= 3.2
 BuildRequires: /usr/sbin/mke2fs
 BuildRequires: e2fsprogs-devel
+BuildRequires: findutils
 BuildRequires: glibc-static, zlib-static
 BuildRequires: ocaml, ocaml-findlib-devel
 
-# automake isn't actually required; however the src/.depend file gets
-# rebuilt which newer automake thinks (wrongly) means that the
-# Makefile.am has been touched and needs rebuilding.
-BuildRequires: automake
+# Patches touch src/Makefile.am, so:
+BuildRequires: automake, autoconf
 
 # BRs for supermin 5 (those not listed already):
 BuildRequires: yum-utils
@@ -91,6 +100,12 @@ Requires:      tar
 Requires:      /usr/sbin/mke2fs
 # RHBZ#771310
 Requires:      e2fsprogs-libs >= 1.42
+Requires:      findutils
+
+# For automatic RPM dependency generation.
+# See: http://www.rpm.org/wiki/PackagerDocs/DependencyGenerator
+Source2:       supermin.attr
+Source3:       supermin-find-requires
 
 
 %description -n supermin5
@@ -104,6 +119,19 @@ is called 'supermin5', so that we do not break compatibility
 with RHEL 7 GA.
 
 
+%package -n supermin5-devel
+Summary:       Development tools for supermin5
+Requires:      supermin5 = %{version}-%{release}
+Requires:      rpm-build
+
+
+%description -n supermin5-devel
+supermin5-devel contains development tools for supermin5.
+
+It just contains tools for automatic RPM dependency generation
+from supermin appliances.
+
+
 %prep
 # This creates:
 #   supermin-5.*/
@@ -112,8 +140,22 @@ with RHEL 7 GA.
 %setup -q -c
 %setup -T -D -a 1
 
-# This is so supermin 4 no longer requires prelink:
-cp %{name}-%{version}/src/bin2s.pl %{name}-4.1.4/helper/bin2s.pl
+pushd supermin-4.1.4
+%patch0 -p1
+popd
+
+pushd %{name}-%{version}
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
+%patch4 -p1
+%patch5 -p1
+%patch6 -p1
+%patch7 -p1
+
+# Patches touch src/Makefile.am, so:
+autoreconf -i
+popd
 
 
 %build
@@ -144,6 +186,10 @@ popd
 pushd %{name}-4.1.4
 make DESTDIR=$RPM_BUILD_ROOT install
 popd
+
+mkdir -p $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
+install -m 0644 %{SOURCE2} $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
+install -m 0755 %{SOURCE3} $RPM_BUILD_ROOT%{_rpmconfigdir}/
 
 
 %check
@@ -181,7 +227,31 @@ popd
 %{_mandir}/man1/supermin5.1*
 
 
+%files -n supermin5-devel
+%{_rpmconfigdir}/fileattrs/supermin.attr
+%{_rpmconfigdir}/supermin-find-requires
+
+
 %changelog
+* Wed Jul 06 2016 Richard W.M. Jones <rjones@redhat.com> - 5.1.16-4
+- Add all upstream patches since 5.1.16 was released.
+
+* Wed May 25 2016 Richard W.M. Jones <rjones@redhat.com> - 5.1.16-2
+- supermin init segfaults when kernel has large modules (1339691)
+
+* Wed Apr 27 2016 Richard W.M. Jones <rjones@redhat.com> - 5.1.16-1
+- New upstream version 5.1.16.
+- Drop all patches since they are upstream.
+
+* Wed Apr 20 2016 Richard W.M. Jones <rjones@redhat.com> - 5.1.15-3
+- Add all upstream patches since 5.1.15 was released.
+- These should improve boot performance and initrd size.
+
+* Wed Feb 17 2016 Richard W.M. Jones <rjones@redhat.com> - 5.1.15-1
+- Rebase to supermin 5.1.15.
+  resolves: rhbz#1271255
+- Create supermin5-devel package containing RPM dependency generator.
+
 * Wed Sep 10 2014 Richard W.M. Jones <rjones@redhat.com> - 5.1.10-1.2
 - Enable all ppc64 architectures, including BE.
 

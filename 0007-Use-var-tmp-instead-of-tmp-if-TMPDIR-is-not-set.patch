@@ -1,0 +1,34 @@
+From 12fc339efb1d287593b53da1dfddc88f876f8e7d Mon Sep 17 00:00:00 2001
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Wed, 6 Jul 2016 14:12:28 +0100
+Subject: [PATCH 7/7] Use /var/tmp instead of /tmp if TMPDIR is not set.
+
+See: https://bugzilla.redhat.com/show_bug.cgi?id=1316479#c12
+
+Thanks: Junqin Zhou
+---
+ src/supermin.ml | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/supermin.ml b/src/supermin.ml
+index b0532e5..a09b498 100644
+--- a/src/supermin.ml
++++ b/src/supermin.ml
+@@ -57,9 +57,12 @@ let main () =
+   if try Filename.is_relative (getenv "TMPDIR") with Not_found -> false then
+     error "error: environment variable $TMPDIR must be an absolute path";
+ 
+-  (* Create a temporary directory for scratch storage. *)
++  (* Create a temporary directory for scratch storage.  Because it's
++   * for large files, use /var/tmp if TMPDIR is not set.
++   *)
+   let tmpdir =
+-    let tmpdir = Filename.temp_file "supermin" ".tmpdir" in
++    let temp_dir = try getenv "TMPDIR" with Not_found -> "/var/tmp" in
++    let tmpdir = Filename.temp_file ~temp_dir "supermin" ".tmpdir" in
+     unlink tmpdir;
+     mkdir tmpdir 0o700;
+     at_exit
+-- 
+2.7.4
+
