@@ -3,32 +3,46 @@
 # supermin 5.  The 'supermin' binary is supermin 4.  The new
 # subpackage 'supermin5' contains a binary of the same name.
 
+%ifnarch %{ocaml_native_compiler}
+%global __strip /bin/true
+%global debug_package %{nil}
+%endif
+
+# _hardened_build breaks building the static 'init' binary.
+# https://bugzilla.redhat.com/show_bug.cgi?id=1202091
+# https://bugzilla.redhat.com/show_bug.cgi?id=1204162
+%undefine _hardened_build
+
+# Whether we should verify tarball signature with GPGv2.
+%global verify_tarball_signature 1
+
 Summary:       Tool for creating supermin appliances
 Name:          supermin
-Version:       5.1.16
-Release:       4%{?dist}
+Version:       5.1.19
+Release:       1%{?dist}
 License:       GPLv2+
 
-%if 0%{?rhel} >= 7
-ExclusiveArch: aarch64 %{power64} x86_64
-%endif
+ExcludeArch:   s390
 
 URL:           http://people.redhat.com/~rjones/supermin/
 Source0:       http://libguestfs.org/download/supermin/%{name}-4.1.4.tar.gz
 Source1:       http://libguestfs.org/download/supermin/%{name}-%{version}.tar.gz
 
+%if 0%{verify_tarball_signature}
+Source2:       http://libguestfs.org/download/supermin/%{name}-%{version}.tar.gz.sig
+%endif
+
+# Keyring used to verify tarball signature.
+%if 0%{verify_tarball_signature}
+Source3:       libguestfs.keyring
+%endif
+
 # Patches for supermin 4:
 Patch0:        supermin-4.1.4-fix-exec-stack.patch
+Patch1:        supermin-4.1.4-disable-warning-3.patch
 
 # Patches for supermin 5:
-# All upstream patches since 5.1.16 was released.
-Patch1:        0001-Add-support-for-a-DAX-root-filesystem.patch
-Patch2:        0002-init-Don-t-allocate-modules-on-the-stack-RHBZ-133969.patch
-Patch3:        0003-init-Print-size-of-init.patch
-Patch4:        0004-init-Delete-initramfs-files-before-chrooting-into-th.patch
-Patch5:        0005-ext2-Don-t-load-whole-files-into-memory-when-copying.patch
-Patch6:        0006-build-include-packagelist-Use-supermin-tmpdir.patch
-Patch7:        0007-Use-var-tmp-instead-of-tmp-if-TMPDIR-is-not-set.patch
+#(nothing)
 
 # BRs for supermin 4:
 BuildRequires: /usr/bin/pod2man
@@ -41,12 +55,14 @@ BuildRequires: e2fsprogs-devel
 BuildRequires: findutils
 BuildRequires: glibc-static, zlib-static
 BuildRequires: ocaml, ocaml-findlib-devel
-
 # Patches touch src/Makefile.am, so:
 BuildRequires: automake, autoconf
 
 # BRs for supermin 5 (those not listed already):
 BuildRequires: yum-utils
+%if 0%{verify_tarball_signature}
+BuildRequires: gnupg2
+%endif
 
 # These are required only to run the tests.  We could patch out the
 # tests to not require these packages.
@@ -104,8 +120,8 @@ Requires:      findutils
 
 # For automatic RPM dependency generation.
 # See: http://www.rpm.org/wiki/PackagerDocs/DependencyGenerator
-Source2:       supermin.attr
-Source3:       supermin-find-requires
+Source4:       supermin.attr
+Source5:       supermin-find-requires
 
 
 %description -n supermin5
@@ -133,6 +149,10 @@ from supermin appliances.
 
 
 %prep
+%if 0%{verify_tarball_signature}
+tmphome="$(mktemp -d)"
+gpgv2 --homedir "$tmphome" --keyring %{SOURCE3} %{SOURCE2} %{SOURCE1}
+%endif
 # This creates:
 #   supermin-5.*/
 #   supermin-5.*/supermin-4.1.4/    # supermin 4
@@ -142,19 +162,11 @@ from supermin appliances.
 
 pushd supermin-4.1.4
 %patch0 -p1
+%patch1 -p2
 popd
 
 pushd %{name}-%{version}
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
-%patch5 -p1
-%patch6 -p1
-%patch7 -p1
-
-# Patches touch src/Makefile.am, so:
-autoreconf -i
+#(no patches need to be applied to supermin 5)
 popd
 
 
@@ -188,11 +200,12 @@ make DESTDIR=$RPM_BUILD_ROOT install
 popd
 
 mkdir -p $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
-install -m 0644 %{SOURCE2} $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
-install -m 0755 %{SOURCE3} $RPM_BUILD_ROOT%{_rpmconfigdir}/
+install -m 0644 %{SOURCE4} $RPM_BUILD_ROOT%{_rpmconfigdir}/fileattrs/
+install -m 0755 %{SOURCE5} $RPM_BUILD_ROOT%{_rpmconfigdir}/
 
 
 %check
+%ifarch aarch64 %{power64} s390x x86_64
 pushd %{name}-4.1.4
 make check
 popd
@@ -203,6 +216,7 @@ make check || {
     exit 1
 }
 popd
+%endif
 
 
 %files
@@ -233,6 +247,13 @@ popd
 
 
 %changelog
+* Sat Sep 23 2017 Richard W.M. Jones <rjones@redhat.com> - 5.1.19-1
+- Rebase to supermin 5.1.19.
+- Build on s390x.
+- Add upstream signature.
+- Remove upstream patches.
+  resolves: rhbz#1484890, rhbz#1484973
+
 * Wed Jul 06 2016 Richard W.M. Jones <rjones@redhat.com> - 5.1.16-4
 - Add all upstream patches since 5.1.16 was released.
 

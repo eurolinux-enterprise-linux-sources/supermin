@@ -1,0 +1,24 @@
+diff -ur supermin-5.1.19/supermin-4.1.4.old/src/Makefile.am supermin-5.1.19/supermin-4.1.4/src/Makefile.am
+--- supermin-5.1.19/supermin-4.1.4.old/src/Makefile.am	2013-08-28 21:51:57.000000000 +0100
++++ supermin-5.1.19/supermin-4.1.4/src/Makefile.am	2017-09-23 11:09:32.911891180 +0100
+@@ -79,7 +79,7 @@
+ if HAVE_OCAML_INIFILES
+ OCAMLPACKAGES += -package inifiles
+ endif
+-OCAMLFLAGS = -warn-error CDEFLMPSUVXYZ
++OCAMLFLAGS = -warn-error CDEFLMPSUVXYZ-3
+ 
+ supermin: $(OBJECTS)
+ 	$(OCAMLFIND) $(BEST) $(OCAMLFLAGS) $(OCAMLPACKAGES) -linkpkg \
+diff -ur supermin-5.1.19/supermin-4.1.4.old/src/Makefile.in supermin-5.1.19/supermin-4.1.4/src/Makefile.in
+--- supermin-5.1.19/supermin-4.1.4.old/src/Makefile.in	2017-09-23 11:08:09.420324164 +0100
++++ supermin-5.1.19/supermin-4.1.4/src/Makefile.in	2017-09-23 11:09:39.321704394 +0100
+@@ -1080,7 +1080,7 @@
+ @HAVE_OCAMLOPT_FALSE@BEST = c
+ @HAVE_OCAMLOPT_TRUE@BEST = opt
+ OCAMLPACKAGES = -package unix,str $(am__append_2)
+-OCAMLFLAGS = -warn-error CDEFLMPSUVXYZ
++OCAMLFLAGS = -warn-error CDEFLMPSUVXYZ-3
+ SUFFIXES = .cmo .cmi .cmx .ml .mli .mll .mly
+ @HAVE_PERLDOC_TRUE@noinst_DATA = \
+ @HAVE_PERLDOC_TRUE@	../html/supermin.8.html
