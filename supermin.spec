@@ -1,7 +1,7 @@
 Summary:       Tool for creating supermin appliances
 Name:          supermin
 Version:       4.1.4
-Release:       1%{?dist}
+Release:       2%{?dist}
 License:       GPLv2+
 
 %if 0%{?rhel} >= 7
@@ -95,6 +95,9 @@ make check
 
 
 %changelog
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 4.1.4-2
+- Mass rebuild 2013-12-27
+
 * Wed Aug 28 2013 Richard W.M. Jones <rjones@redhat.com> - 4.1.4-1
 - New upstream version 4.1.4.
 - Supports compressed cpio image files, experimentally.
